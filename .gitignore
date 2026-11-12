@@ -1,3 +1,6 @@
 __pycache__/
 *.db
 .env
+agent_farmasi.py
+setup_postgres.py
+cek_model.py

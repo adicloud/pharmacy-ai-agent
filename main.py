@@ -1,10 +1,13 @@
 import os
 import sqlite3
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
+
+load_dotenv()  # Wajib ada agar membaca file .env saat dites di lokal
 
 # Ambil API Key dari Environment Variable (aman untuk GitHub)
 API_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -101,6 +104,9 @@ def analisis_resep(payload: ResepRequest):
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY belum diatur di server.")
 
     daftar_model = [
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash-lite",
         "gemini-3.5-flash",
         "gemini-3.7-flash",
     ]
