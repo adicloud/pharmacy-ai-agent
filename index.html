@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Pharmacy Assistant - Simulasi SIMRS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+  <div id="app" class="max-w-5xl mx-auto py-8 px-4">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6 border-b pb-4">
+      <div>
+        <h1 class="text-2xl font-bold text-emerald-700">AI Pharmacy Agent</h1>
+        <p class="text-sm text-slate-500">Analisis Resep Otomatis, Cek Stok PostgreSQL &amp; Kalkulasi Racikan</p>
+      </div>
+      <span class="px-3 py-1 text-xs font-medium rounded-full bg-emerald-100 text-emerald-800">
+        API: localhost:8000
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Kolom Kiri: Input Resep Dokter -->
+      <div class="lg:col-span-1 bg-white p-5 rounded-xl shadow-sm border border-slate-200 h-fit">
+        <label class="block text-sm font-semibold text-slate-700 mb-2">
+          Input e-Resep Dokter
+        </label>
+        <textarea
+          v-model="teksResep"
+          rows="8"
+          placeholder="Masukkan resep dokter di sini..."
+          class="w-full p-3 text-sm font-mono border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+        ></textarea>
+
+        <div class="flex gap-2 mt-3">
+          <button
+            @click="isiContohResep"
+            type="button"
+            class="px-3 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
+          >
+            Contoh Resep
+          </button>
+          <button
+            @click="analisisResep"
+            :disabled="loading || !teksResep.trim()"
+            class="flex-1 py-2 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 text-white text-sm font-semibold rounded-lg shadow-sm transition flex items-center justify-center gap-2"
+          >
+            <span v-if="loading" class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
+            <span>{{ loading ? 'Menganalisis...' : 'Analisis Resep' }}</span>
+          </button>
+        </div>
+
+        <!-- Pesan Error -->
+        <div v-if="errorMsg" class="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg">
+          <strong>Gagal memproses:</strong> {{ errorMsg }}
+        </div>
+      </div>
+
+      <!-- Kolom Kanan: Hasil Analisis AI Agent -->
+      <div class="lg:col-span-2 space-y-5">
+        <!-- Placeholder sebelum ada hasil -->
+        <div v-if="!hasil && !loading" class="bg-white p-10 rounded-xl border border-dashed border-slate-300 text-center text-slate-400">
+          <p class="text-sm">Tempel teks resep di sebelah kiri lalu klik <strong>Analisis Resep</strong> untuk melihat hasil pengecekan database dan racikan.</p>
+        </div>
+
+        <!-- Loading Skeleton -->
+        <div v-if="loading" class="bg-white p-8 rounded-xl border border-slate-200 text-center space-y-3">
+          <div class="animate-spin h-8 w-8 border-4 border-emerald-600 border-t-transparent rounded-full mx-auto"></div>
+          <p class="text-sm font-medium text-slate-600">AI Agent sedang mengecek stok PostgreSQL &amp; menghitung dosis racikan...</p>
+        </div>
+
+        <!-- Output Hasil -->
+        <template v-if="hasil && !loading">
+          <!-- Banner Peringatan Konfirmasi Dokter -->
+          <div
+            v-if="hasil.perlu_konfirmasi_dokter"
+            class="p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r-xl flex items-start gap-3"
+          >
+            <span class="text-amber-600 font-bold text-lg">⚠️</span>
+            <div>
+              <h3 class="text-sm font-bold text-amber-800">Perlu Konfirmasi Dokter / Pasien</h3>
+              <p class="text-xs text-amber-700 mt-0.5">Terdapat obat yang stoknya kosong atau memerlukan penyesuaian sebelum diserahkan.</p>
+            </div>
+          </div>
+
+          <!-- Ringkasan Klinis -->
+          <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Ringkasan Klinis</h2>
+            <p class="text-sm text-slate-700 leading-relaxed">{{ hasil.ringkasan_klinis }}</p>
+          </div>
+
+          <!-- Tabel Daftar Obat & Pengambilan Rak -->
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="px-5 py-3.5 border-b border-slate-200 bg-slate-50/50">
+              <h2 class="text-sm font-bold text-slate-700">Daftar Pengambilan &amp; Perhitungan Obat</h2>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-200 text-xs uppercase text-slate-500 bg-slate-50">
+                    <th class="py-3 px-4">Nama Obat</th>
+                    <th class="py-3 px-4">Jenis</th>
+                    <th class="py-3 px-4">Ambil</th>
+                    <th class="py-3 px-4">Rak</th>
+                    <th class="py-3 px-4">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-sm">
+                  <tr v-for="(item, idx) in hasil.daftar_obat" :key="idx" class="hover:bg-slate-50">
+                    <td class="py-3 px-4">
+                      <div class="font-semibold text-slate-800">{{ item.nama_obat }}</div>
+                      <div class="text-xs text-slate-500 mt-0.5">{{ item.catatan }}</div>
+                    </td>
+                    <td class="py-3 px-4">
+                      <span
+                        :class="item.jenis === 'Racikan' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'"
+                        class="px-2 py-0.5 rounded text-xs font-medium"
+                      >
+                        {{ item.jenis }}
+                      </span>
+                    </td>
+                    <td class="py-3 px-4 font-bold text-slate-800">
+                      {{ item.jumlah_diambil }} {{ item.satuan }}
+                    </td>
+                    <td class="py-3 px-4">
+                      <span class="px-2 py-1 bg-slate-100 border border-slate-300 rounded font-mono text-xs font-bold">
+                        {{ item.lokasi_rak }}
+                      </span>
+                    </td>
+                    <td class="py-3 px-4">
+                      <span
+                        :class="{
+                          'bg-emerald-100 text-emerald-700': item.status_stok === 'Tersedia',
+                          'bg-amber-100 text-amber-700': item.status_stok === 'Kurang',
+                          'bg-red-100 text-red-700': item.status_stok === 'Kosong'
+                        }"
+                        class="px-2.5 py-1 rounded-full text-xs font-semibold"
+                      >
+                        {{ item.status_stok }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Checklist SOP Kerja Apoteker -->
+          <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+            <h2 class="text-sm font-bold text-slate-700 mb-3">Checklist Kerja Apoteker (SOP)</h2>
+            <ul class="space-y-2.5">
+              <li
+                v-for="(langkah, index) in hasil.langkah_kerja_apoteker"
+                :key="index"
+                class="flex items-start gap-3 text-sm text-slate-700"
+              >
+                <input
+                  type="checkbox"
+                  :id="'step-' + index"
+                  class="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+                <label :for="'step-' + index" class="cursor-pointer leading-snug">
+                  {{ langkah }}
+                </label>
+              </li>
+            </ul>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref } = Vue;
+
+    createApp({
+      setup() {
+        const teksResep = ref(
+          "R/ Paracetamol 250 mg\n   CTM 2 mg\n   m.f. pulv. dtd No. X\nR/ Amoxicillin 500 mg No. XV"
+        );
+        const loading = ref(false);
+        const hasil = ref(null);
+        const errorMsg = ref("");
+
+        const isiContohResep = () => {
+          teksResep.value =
+            "R/ Paracetamol 250 mg\n   CTM 2 mg\n   Dexamethasone 0.25 mg\n   m.f. pulv. dtd No. X\nR/ Ambroxol 30 mg No. X\nR/ Amoxicillin 500 mg No. XV";
+        };
+
+        const analisisResep = async () => {
+          loading.value = true;
+          errorMsg.value = "";
+          hasil.value = null;
+
+          try {
+            const response = await fetch("http://127.0.0.1:8000/api/resep/analisis", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ teks_resep: teksResep.value })
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+              throw new Error(data.detail || "Terjadi kesalahan pada server API");
+            }
+            hasil.value = data;
+          } catch (err) {
+            errorMsg.value = err.message;
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        return { teksResep, loading, hasil, errorMsg, isiContohResep, analisisResep };
+      }
+    }).mount("#app");
+  </script>
+</body>
+</html>
