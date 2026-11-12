@@ -194,7 +194,7 @@
           hasil.value = null;
 
           try {
-            const response = await fetch("http://127.0.0.1:8000/api/resep/analisis", {
+            const response = await fetch("https://pharmacy-ai-agent-ewum.onrender.com/api/resep/analisis", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ teks_resep: teksResep.value })
